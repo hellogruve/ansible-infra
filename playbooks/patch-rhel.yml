@@ -1,0 +1,37 @@
+---
+- name: Patch RHEL VM
+  hosts: all
+  become: true
+
+  tasks:
+
+    - name: Check current OS version
+      ansible.builtin.command: cat /etc/redhat-release
+      register: os_version
+      changed_when: false
+
+    - name: Print OS version
+      ansible.builtin.debug:
+        msg: "Patching: {{ os_version.stdout }}"
+
+    - name: Apply all updates
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+        update_cache: true
+      register: patch_result
+
+    - name: Show patch summary
+      ansible.builtin.debug:
+        msg: "Updated {{ patch_result.results | length }} packages"
+
+    - name: Check if reboot is required
+      ansible.builtin.stat:
+        path: /var/run/needs-restarting
+      register: reboot_required
+
+    - name: Reboot if kernel was updated
+      ansible.builtin.reboot:
+        msg: "Rebooting after patching"
+        reboot_timeout: 300
+      when: reboot_required.stat.exists
