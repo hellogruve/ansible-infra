@@ -1,0 +1,31 @@
+---
+- name: Check critical services status
+  hosts: all
+  become: true
+
+  vars:
+    services_to_check:
+      - haproxy
+      - sshd
+      - firewalld
+
+  tasks:
+    - name: Check each service
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+      register: service_status
+      loop: "{{ services_to_check }}"
+      ignore_errors: true
+
+    - name: Report service status
+      ansible.builtin.debug:
+        msg: >
+          {{ item.item }}:
+          {{ item.status.ActiveState | default('not found') }}
+      loop: "{{ service_status.results }}"
+
+    - name: Flag stopped services
+      ansible.builtin.debug:
+        msg: "⚠️  {{ item.item }} is NOT running!"
+      loop: "{{ service_status.results }}"
+      when: item.status.ActiveState | default('') != 'active'
