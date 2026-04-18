@@ -1,0 +1,34 @@
+---
+- name: Check disk space
+  hosts: all
+  become: true
+
+  vars:
+    threshold: 80
+
+  tasks:
+    - name: Get disk usage
+      ansible.builtin.shell: df -h --output=source,pcent,target | tail -n +2
+      register: disk_usage
+      changed_when: false
+
+    - name: Show all filesystems
+      ansible.builtin.debug:
+        msg: "{{ disk_usage.stdout_lines }}"
+
+    - name: Check for filesystems over threshold
+      ansible.builtin.shell: |
+        df --output=pcent,target | tail -n +2 | \
+        awk -v t={{ threshold }} '{gsub(/%/,""); if($1 > t) print $2, $1"%"}'
+      register: over_threshold
+      changed_when: false
+
+    - name: Warn if over threshold
+      ansible.builtin.debug:
+        msg: "⚠️  WARNING - Over {{ threshold }}%: {{ over_threshold.stdout_lines }}"
+      when: over_threshold.stdout != ""
+
+    - name: All filesystems healthy
+      ansible.builtin.debug:
+        msg: "✅ All filesystems under {{ threshold }}% — OK"
+      when: over_threshold.stdout == ""
