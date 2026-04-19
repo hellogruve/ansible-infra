@@ -1,0 +1,47 @@
+---
+- name: Remediate service on target host
+  hosts: all
+  become: true
+
+  vars:
+    target_service: "haproxy"
+    snow_incident_number: ""
+
+  tasks:
+    - name: Check service status before remediation
+      ansible.builtin.systemd:
+        name: "{{ target_service }}"
+      register: pre_status
+
+    - name: Log pre-remediation status
+      ansible.builtin.debug:
+        msg: "Pre-remediation: {{ target_service }} is {{ pre_status.status.ActiveState }}"
+
+    - name: Start and enable service
+      ansible.builtin.systemd:
+        name: "{{ target_service }}"
+        state: started
+        enabled: true
+      when: pre_status.status.ActiveState != "active"
+
+    - name: Restart service if already running but unhealthy
+      ansible.builtin.systemd:
+        name: "{{ target_service }}"
+        state: restarted
+      when: pre_status.status.ActiveState == "active"
+
+    - name: Verify service is running post-remediation
+      ansible.builtin.systemd:
+        name: "{{ target_service }}"
+      register: post_status
+
+    - name: Fail if service still not running
+      ansible.builtin.fail:
+        msg: "Remediation failed - {{ target_service }} still not active"
+      when: post_status.status.ActiveState != "active"
+
+    - name: Remediation successful
+      ansible.builtin.debug:
+        msg: >
+          Incident {{ snow_incident_number }} - 
+          {{ target_service }} is now {{ post_status.status.ActiveState }}
