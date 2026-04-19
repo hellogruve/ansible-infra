@@ -1,0 +1,32 @@
+---
+- name: RHEL Infrastructure Event Handler
+  hosts: all
+
+  sources:
+    - ansible.eda.webhook:
+        host: 0.0.0.0
+        port: 5000
+
+  rules:
+    - name: Service down event
+      condition: event.payload.issue == "service_down"
+      action:
+        run_job_template:
+          name: "RHEL Remediation Workflow"
+          organization: "Default"
+          job_args:
+            extra_vars:
+              event_host: "{{ event.payload.host }}"
+              event_issue: "{{ event.payload.issue }}"
+              target_service: "{{ event.payload.service }}"
+
+    - name: Disk critical event
+      condition: event.payload.issue == "disk_critical"
+      action:
+        run_job_template:
+          name: "RHEL Remediation Workflow"
+          organization: "Default"
+          job_args:
+            extra_vars:
+              event_host: "{{ event.payload.host }}"
+              event_issue: "{{ event.payload.issue }}"
