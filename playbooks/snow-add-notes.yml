@@ -1,0 +1,29 @@
+---
+- name: Add notes to ServiceNow Incident
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    snow_instance: "dev385032.service-now.com"
+    snow_user: "admin"
+    snow_password: "c%%tv4yUII5P"
+    snow_sys_id: ""
+    work_notes: "Remediation in progress..."
+
+  tasks:
+    - name: Add work notes to incident
+      ansible.builtin.uri:
+        url: "https://{{ snow_instance }}/api/now/table/incident/{{ snow_sys_id }}"
+        method: PATCH
+        user: "{{ snow_user }}"
+        password: "{{ snow_password }}"
+        force_basic_auth: true
+        body_format: json
+        body:
+          work_notes: "{{ work_notes }}"
+          state: "2"
+        validate_certs: false
+
+    - name: Notes added
+      ansible.builtin.debug:
+        msg: "Work notes added to incident {{ snow_sys_id }}"
