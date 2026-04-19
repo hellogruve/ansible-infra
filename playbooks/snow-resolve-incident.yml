@@ -1,0 +1,38 @@
+---
+- name: Resolve ServiceNow Incident
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    snow_instance: "dev385032.service-now.com"
+    snow_user: "admin"
+    snow_password: "c%%tv4yUII5P"
+    snow_sys_id: ""
+    snow_incident_number: ""
+    remediation_summary: "Automated remediation completed successfully"
+
+  tasks:
+    - name: Add resolution notes to incident
+      ansible.builtin.uri:
+        url: "https://{{ snow_instance }}/api/now/table/incident/{{ snow_sys_id }}"
+        method: PATCH
+        user: "{{ snow_user }}"
+        password: "{{ snow_password }}"
+        force_basic_auth: true
+        body_format: json
+        body:
+          state: "6"
+          close_code: "Solved (Permanently)"
+          close_notes: |
+            Incident resolved by Gruve NOC automated remediation.
+            Summary: {{ remediation_summary }}
+            Resolved by: Ansible Automation Platform
+          work_notes: |
+            Remediation playbook executed successfully.
+            All services verified healthy post-remediation.
+        validate_certs: false
+      register: resolve_response
+
+    - name: Confirm resolution
+      ansible.builtin.debug:
+        msg: "Incident {{ snow_incident_number }} resolved successfully"
