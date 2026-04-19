@@ -1,0 +1,47 @@
+---
+- name: Create ServiceNow Incident
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    snow_instance: "dev385032.service-now.com"
+    snow_user: "admin"
+    snow_password: "c%%tv4yUII5P"
+    event_host: "haproxy-nj"
+    event_issue: "service_down"
+    event_severity: "critical"
+
+  tasks:
+    - name: Create incident in ServiceNow
+      ansible.builtin.uri:
+        url: "https://{{ snow_instance }}/api/now/table/incident"
+        method: POST
+        user: "{{ snow_user }}"
+        password: "{{ snow_password }}"
+        force_basic_auth: true
+        body_format: json
+        body:
+          short_description: "[GRUVE NOC] {{ event_issue }} detected on {{ event_host }}"
+          description: |
+            Automated incident created by Gruve NOC Agent.
+            Host: {{ event_host }}
+            Issue: {{ event_issue }}
+            Severity: {{ event_severity }}
+            Detected at: {{ ansible_date_time.iso8601 | default('N/A') }}
+          urgency: "1"
+          impact: "1"
+          category: "software"
+          subcategory: "os"
+        status_code: 201
+        validate_certs: false
+      register: snow_response
+
+    - name: Store incident number
+      ansible.builtin.set_stats:
+        data:
+          snow_incident_number: "{{ snow_response.json.result.number }}"
+          snow_sys_id: "{{ snow_response.json.result.sys_id }}"
+
+    - name: Show incident created
+      ansible.builtin.debug:
+        msg: "Incident created: {{ snow_response.json.result.number }}"
