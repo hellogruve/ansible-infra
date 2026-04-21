@@ -13,7 +13,20 @@
     remediation_summary: "Automated remediation completed successfully"
 
   tasks:
-    - name: Add resolution notes to incident
+    - name: Set caller for incident
+      ansible.builtin.uri:
+        url: "https://{{ snow_instance }}/api/now/table/incident/{{ snow_sys_id }}"
+        method: PATCH
+        user: "{{ snow_user }}"
+        password: "{{ snow_password }}"
+        force_basic_auth: true
+        body_format: json
+        body:
+          caller_id: "admin"
+        validate_certs: false
+      register: caller_result
+
+    - name: Resolve the incident
       ansible.builtin.uri:
         url: "https://{{ snow_instance }}/api/now/table/incident/{{ snow_sys_id }}"
         method: PATCH
@@ -24,16 +37,12 @@
         body:
           state: "6"
           close_code: "Solved (Permanently)"
-          close_notes: |
-            Incident resolved by Gruve NOC automated remediation.
-            Summary: {{ remediation_summary }}
-            Resolved by: Ansible Automation Platform
-          work_notes: |
-            Remediation playbook executed successfully.
-            All services verified healthy post-remediation.
+          close_notes: "Incident resolved by Gruve NOC automated remediation. {{ remediation_summary }}"
+          caller_id: "admin"
+        status_code: [200, 201]
         validate_certs: false
       register: resolve_response
 
     - name: Confirm resolution
       ansible.builtin.debug:
-        msg: "Incident {{ snow_incident_number }} resolved successfully"
+        msg: "Incident {{ snow_incident_number }} resolved - State: {{ resolve_response.json.result.state }}"
