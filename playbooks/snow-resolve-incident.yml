@@ -2,6 +2,7 @@
 - name: Resolve ServiceNow Incident
   hosts: localhost
   gather_facts: false
+  become: false
 
   vars:
     snow_instance: "dev385032.service-now.com"
