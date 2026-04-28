@@ -1,0 +1,58 @@
+---
+- name: Gruve NOC — Meraki Internet Down Remediation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    meraki_api_key: "{{ meraki_api_key | default('') }}"
+    device_serial:  "{{ device_serial | default('') }}"
+    device_name:    "{{ device_name | default('unknown') }}"
+    network_id:     "{{ network_id | default('') }}"
+    snow_ticket:    "{{ snow_ticket | default('') }}"
+    uplink_name:    "{{ uplink_name | default('WAN1') }}"
+
+  tasks:
+
+    - name: Log incident details
+      debug:
+        msg: |
+          Gruve NOC Remediation Started
+          Incident: INTERNET_DOWN
+          Device: {{ device_name }} ({{ device_serial }})
+          Uplink: {{ uplink_name }}
+          Network: {{ network_id }}
+          ServiceNow: {{ snow_ticket }}
+
+    - name: Check uplink status via Meraki API
+      uri:
+        url: "https://api.meraki.com/api/v1/organizations/1655564/appliance/uplink/statuses"
+        method: GET
+        headers:
+          X-Cisco-Meraki-API-Key: "{{ meraki_api_key }}"
+          Content-Type: application/json
+        validate_certs: true
+        status_code: 200
+      register: uplink_status
+      ignore_errors: true
+
+    - name: Attempt MX appliance reboot
+      uri:
+        url: "https://api.meraki.com/api/v1/devices/{{ device_serial }}/reboot"
+        method: POST
+        headers:
+          X-Cisco-Meraki-API-Key: "{{ meraki_api_key }}"
+          Content-Type: application/json
+        validate_certs: true
+        status_code: [200, 202]
+      register: reboot_result
+      ignore_errors: true
+      when: device_serial != ''
+
+    - name: Display remediation result
+      debug:
+        msg: >-
+          Internet down remediation executed for {{ device_name }}.
+          Uplink: {{ uplink_name }}.
+          Reboot status: {{ reboot_result.status | default('skipped') }}.
+          ServiceNow ticket: {{ snow_ticket }}
