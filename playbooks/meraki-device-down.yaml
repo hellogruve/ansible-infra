@@ -1,0 +1,64 @@
+---
+- name: Gruve NOC — Meraki Device Down Remediation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    meraki_api_key: "{{ meraki_api_key | default('') }}"
+    device_serial:  "{{ device_serial | default('') }}"
+    device_name:    "{{ device_name | default('unknown') }}"
+    network_id:     "{{ network_id | default('') }}"
+    snow_ticket:    "{{ snow_ticket | default('') }}"
+    incident_id:    "{{ incident_id | default('') }}"
+
+  tasks:
+
+    - name: Log incident details
+      debug:
+        msg: |
+          Gruve NOC Remediation Started
+          Incident: DEVICE_DOWN
+          Device: {{ device_name }} ({{ device_serial }})
+          Network: {{ network_id }}
+          ServiceNow: {{ snow_ticket }}
+
+    - name: Check device status via Meraki API
+      uri:
+        url: "https://api.meraki.com/api/v1/devices/{{ device_serial }}"
+        method: GET
+        headers:
+          X-Cisco-Meraki-API-Key: "{{ meraki_api_key }}"
+          Content-Type: application/json
+        validate_certs: true
+        status_code: [200, 404]
+      register: device_check
+      when: device_serial != ''
+
+    - name: Attempt device reboot via Meraki API
+      uri:
+        url: "https://api.meraki.com/api/v1/devices/{{ device_serial }}/reboot"
+        method: POST
+        headers:
+          X-Cisco-Meraki-API-Key: "{{ meraki_api_key }}"
+          Content-Type: application/json
+        validate_certs: true
+        status_code: [200, 202]
+      register: reboot_result
+      ignore_errors: true
+      when: device_serial != ''
+
+    - name: Set remediation result message
+      set_fact:
+        result_msg: >-
+          {% if reboot_result is not skipped and reboot_result.status in [200, 202] %}
+          Reboot command sent successfully to {{ device_name }} via Meraki API.
+          Monitoring for recovery. Ticket: {{ snow_ticket }}
+          {% else %}
+          Reboot attempt completed for {{ device_name }}.
+          Manual verification may be required. Ticket: {{ snow_ticket }}
+          {% endif %}
+
+    - name: Display result
+      debug:
+        msg: "{{ result_msg }}"
