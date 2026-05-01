@@ -1,0 +1,72 @@
+---
+- name: Gruve NOC — VM Service Restart
+  hosts: "{{ target_host | default('haproxy-nj') }}"
+  become: true
+  gather_facts: false
+
+  vars:
+    service_name:  "{{ service_name | default('haproxy') }}"
+    snow_ticket:   "{{ snow_ticket | default('') }}"
+    incident_id:   "{{ incident_id | default('') }}"
+    noc_api_url:   "https://noc-api-gruve-noc.apps.ocp-mig2.gruveai.com"
+
+  tasks:
+
+    - name: Log remediation start
+      ansible.builtin.debug:
+        msg: |
+          Gruve NOC — Service Restart
+          Host:    {{ inventory_hostname }}
+          Service: {{ service_name }}
+          Ticket:  {{ snow_ticket }}
+
+    - name: Check current service status
+      ansible.builtin.systemd:
+        name: "{{ service_name }}"
+      register: pre_status
+      ignore_errors: true
+
+    - name: Show pre-restart status
+      ansible.builtin.debug:
+        msg: "{{ service_name }} current state: {{ pre_status.status.ActiveState | default('unknown') }}"
+
+    - name: Restart the service
+      ansible.builtin.systemd:
+        name: "{{ service_name }}"
+        state: restarted
+      register: restart_result
+      ignore_errors: true
+
+    - name: Wait for service to stabilize
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: Verify service is running
+      ansible.builtin.systemd:
+        name: "{{ service_name }}"
+      register: post_status
+
+    - name: Set result message
+      ansible.builtin.set_fact:
+        result_msg: >-
+          {{ service_name }} on {{ inventory_hostname }}:
+          {{ post_status.status.ActiveState }}.
+          Ticket: {{ snow_ticket }}
+
+    - name: Show result
+      ansible.builtin.debug:
+        msg: "{{ result_msg }}"
+
+    - name: Notify NOC Agent — resolved
+      ansible.builtin.uri:
+        url: "{{ noc_api_url }}/api/v1/resolve"
+        method: POST
+        body_format: json
+        body:
+          incident_id: "{{ incident_id }}"
+          status: "resolved"
+          message: "{{ result_msg }}"
+        validate_certs: false
+        status_code: [200, 201, 404]
+      ignore_errors: true
+      when: incident_id != ''
