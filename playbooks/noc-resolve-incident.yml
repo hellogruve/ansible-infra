@@ -1,0 +1,28 @@
+---
+- name: Notify Gruve NOC Agent — Incident Resolved
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    noc_api_url: "https://noc-api-gruve-noc.apps.ocp-mig2.gruveai.com"
+    incident_id: "{{ incident_id | default('') }}"
+
+  tasks:
+    - name: Mark incident resolved in NOC Agent
+      ansible.builtin.uri:
+        url: "{{ noc_api_url }}/api/v1/resolve"
+        method: POST
+        body_format: json
+        body:
+          incident_id: "{{ incident_id }}"
+          status: "resolved"
+          message: "Resolved by AAP workflow — ServiceNow ticket closed"
+        validate_certs: false
+        status_code: [200, 201, 404]
+      register: result
+      ignore_errors: true
+
+    - name: Show result
+      debug:
+        msg: "NOC Agent notified: {{ result.status }}"
