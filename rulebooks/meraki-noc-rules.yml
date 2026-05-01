@@ -1,0 +1,47 @@
+---
+- name: Gruve NOC — Meraki Incident Rules
+  hosts: all
+  sources:
+    - ansible.eda.webhook:
+        host: 0.0.0.0
+        port: 5000
+        token: "gruve-noc-eda-2026"
+
+  rules:
+
+    - name: Device Down — Trigger Workflow
+      condition: event.payload.incident_type == "DEVICE_DOWN"
+      action:
+        run_workflow_template:
+          name: meraki-remediation-workflow
+          organization: Default
+          job_args:
+            extra_vars:
+              event_host:      "{{ event.payload.device_name }}"
+              event_issue:     "{{ event.payload.incident_type }}"
+              event_severity:  "critical"
+              device_serial:   "{{ event.payload.device_serial }}"
+              device_name:     "{{ event.payload.device_name }}"
+              network_id:      "{{ event.payload.network_id }}"
+              network_name:    "{{ event.payload.network_name }}"
+              incident_id:     "{{ event.payload.incident_id }}"
+              meraki_api_key:  "{{ event.payload.meraki_api_key }}"
+
+    - name: Internet Down — Trigger Workflow
+      condition: event.payload.incident_type == "INTERNET_DOWN"
+      action:
+        run_workflow_template:
+          name: meraki-remediation-workflow
+          organization: Default
+          job_args:
+            extra_vars:
+              event_host:      "{{ event.payload.device_name }}"
+              event_issue:     "{{ event.payload.incident_type }}"
+              event_severity:  "critical"
+              device_serial:   "{{ event.payload.device_serial }}"
+              device_name:     "{{ event.payload.device_name }}"
+              network_id:      "{{ event.payload.network_id }}"
+              network_name:    "{{ event.payload.network_name }}"
+              incident_id:     "{{ event.payload.incident_id }}"
+              meraki_api_key:  "{{ event.payload.meraki_api_key }}"
+EOF
