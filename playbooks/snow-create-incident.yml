@@ -30,7 +30,15 @@
             Severity: {{ event_severity }}
             Detected at: {{ ansible_date_time.iso8601 | default('N/A') }}
           urgency: "1"
-          impact: "1"
+    - name: Store incident number
+      ansible.builtin.set_stats:
+        data:
+          snow_incident_number: "{{ (snow_response.content | from_json).result.number }}"
+          snow_sys_id: "{{ (snow_response.content | from_json).result.sys_id }}"
+
+    - name: Show incident created
+      ansible.builtin.debug:
+        msg: "Incident: {{ (snow_response.content | from_json).result.number }}"      impact: "1"
           category: "software"
           subcategory: "os"
           caller_id: "admin"
@@ -38,12 +46,4 @@
         validate_certs: false
       register: snow_response
 
-    - name: Store incident number
-      ansible.builtin.set_stats:
-        data:
-          snow_incident_number: "{{ snow_response.json.result.number }}"
-          snow_sys_id: "{{ snow_response.json.result.sys_id }}"
-
-    - name: Show incident created
-      ansible.builtin.debug:
-        msg: "Incident created: {{ snow_response.json.result.number }}"
+    
