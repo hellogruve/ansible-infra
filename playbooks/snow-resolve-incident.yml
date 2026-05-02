@@ -5,9 +5,9 @@
   become: false
 
   vars:
-    snow_instance: "dev385032.service-now.com"
+    snow_instance: "https://dev380179.service-now.com"
     snow_user: "admin"
-    snow_password: "c%%tv4yUII5P"
+    snow_password: "K/-nhCT98gGe"
     snow_sys_id: ""
     snow_incident_number: ""
     remediation_summary: "Automated remediation completed successfully"
