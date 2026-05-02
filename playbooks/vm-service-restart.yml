@@ -5,10 +5,12 @@
   gather_facts: false
 
   vars:
-    service_name:  "{{ service_name | default('haproxy') }}"
+    service_name:  "{{ service_name | default(target_service) | default('haproxy') }}"
+    target_host:   "{{ target_host | default('haproxy-nj') }}"
     snow_ticket:   "{{ snow_ticket | default('') }}"
     incident_id:   "{{ incident_id | default('') }}"
     noc_api_url:   "https://noc-api-gruve-noc.apps.ocp-mig2.gruveai.com"
+  
 
   tasks:
 
