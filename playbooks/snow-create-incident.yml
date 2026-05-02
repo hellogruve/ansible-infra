@@ -34,7 +34,7 @@
           category: "software"
           subcategory: "os"
           caller_id: "admin"
-        status_code: 201
+        status_code: [201,200]
         validate_certs: false
       register: snow_response
 
