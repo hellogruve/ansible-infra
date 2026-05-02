@@ -1,13 +1,13 @@
 ---
 - name: RHEL Infrastructure Event Handler
   hosts: all
-
   sources:
     - ansible.eda.webhook:
         host: 0.0.0.0
         port: 5000
 
   rules:
+
     - name: Service down event
       condition: event.payload.issue == "service_down"
       action:
@@ -16,9 +16,11 @@
           organization: "Default"
           job_args:
             extra_vars:
-              event_host: "{{ event.payload.host }}"
-              event_issue: "{{ event.payload.issue }}"
+              event_host:     "{{ event.payload.host }}"
+              event_issue:    "{{ event.payload.issue }}"
               target_service: "{{ event.payload.service }}"
+              incident_id:    "{{ event.payload.incident_id }}"
+              snow_ticket:    "{{ event.payload.snow_ticket }}"
 
     - name: Disk critical event
       condition: event.payload.issue == "disk_critical"
@@ -28,5 +30,6 @@
           organization: "Default"
           job_args:
             extra_vars:
-              event_host: "{{ event.payload.host }}"
+              event_host:  "{{ event.payload.host }}"
               event_issue: "{{ event.payload.issue }}"
+              incident_id: "{{ event.payload.incident_id }}"
