@@ -6,9 +6,10 @@
 
   vars:
     noc_api_url: "https://noc-api-gruve-noc.apps.ocp-mig2.gruveai.com"
-    incident_id: "{{ incident_id | default('') }}"
+    incident_id: ""
 
   tasks:
+
     - name: Mark incident resolved in NOC Agent
       ansible.builtin.uri:
         url: "{{ noc_api_url }}/api/v1/resolve"
@@ -24,5 +25,5 @@
       ignore_errors: true
 
     - name: Show result
-      debug:
-        msg: "NOC Agent notified: {{ result.status }}"
+      ansible.builtin.debug:
+        msg: "NOC Agent notified: {{ result.status }} {{ result.json | default({}) }}"
