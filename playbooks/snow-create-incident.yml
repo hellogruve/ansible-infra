@@ -46,3 +46,16 @@
     - name: Show incident created
       ansible.builtin.debug:
         msg: "Incident created: {{ snow_response.json.result.number }}"
+
+    - name: Update NOC Agent with ServiceNow ticket number immediately
+      ansible.builtin.uri:
+        url: "https://noc-api-gruve-noc.apps.ocp-mig2.gruveai.com/api/v1/update-ticket"
+        method: POST
+        body_format: json
+        body:
+          incident_id:    "{{ incident_id }}"
+          snow_ticket_id: "{{ snow_response.json.result.number }}"
+          snow_sys_id:    "{{ snow_response.json.result.sys_id }}"
+        validate_certs: false
+        status_code: [200, 201, 404]
+      ignore_errors: true
