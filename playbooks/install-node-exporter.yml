@@ -1,0 +1,106 @@
+---
+- name: Install Node Exporter on VMs
+  hosts: "{{ target_host | default('all') }}"
+  become: true
+  gather_facts: true
+
+  vars:
+    node_exporter_version: "1.8.2"
+    node_exporter_port: 9100
+
+  tasks:
+
+    - name: Check if node_exporter already installed
+      ansible.builtin.shell: systemctl is-active node_exporter 2>/dev/null || echo "not-installed"
+      register: ne_status
+      changed_when: false
+
+    - name: Download node_exporter
+      ansible.builtin.get_url:
+        url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+        dest: "/tmp/node_exporter.tar.gz"
+        mode: '0644'
+      when: ne_status.stdout != "active"
+
+    - name: Extract node_exporter
+      ansible.builtin.unarchive:
+        src: "/tmp/node_exporter.tar.gz"
+        dest: "/tmp/"
+        remote_src: true
+      when: ne_status.stdout != "active"
+
+    - name: Copy binary
+      ansible.builtin.copy:
+        src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
+        dest: "/usr/local/bin/node_exporter"
+        mode: '0755'
+        remote_src: true
+      when: ne_status.stdout != "active"
+
+    - name: Create node_exporter user
+      ansible.builtin.user:
+        name: node_exporter
+        shell: /sbin/nologin
+        system: true
+        create_home: false
+      failed_when: false
+
+    - name: Create systemd service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/node_exporter.service
+        content: |
+          [Unit]
+          Description=Node Exporter
+          After=network.target
+
+          [Service]
+          User=node_exporter
+          ExecStart=/usr/local/bin/node_exporter \
+            --web.listen-address=:{{ node_exporter_port }} \
+            --collector.systemd \
+            --collector.processes
+          Restart=always
+          RestartSec=3
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Enable and start node_exporter
+      ansible.builtin.systemd:
+        name: node_exporter
+        state: started
+        enabled: true
+
+    - name: Open firewall port 9100
+      ansible.builtin.firewalld:
+        port: "{{ node_exporter_port }}/tcp"
+        permanent: true
+        state: enabled
+        immediate: true
+      failed_when: false
+
+    - name: Verify node_exporter is running
+      ansible.builtin.uri:
+        url: "http://localhost:{{ node_exporter_port }}/metrics"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: ne_check
+      failed_when: false
+
+    - name: Report status
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: node_exporter {{ 'RUNNING' if ne_check.status == 200 else 'FAILED - check manually' }} on port {{ node_exporter_port }}"
+
+    - name: Cleanup
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/node_exporter.tar.gz
+        - "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64"
+      failed_when: false
