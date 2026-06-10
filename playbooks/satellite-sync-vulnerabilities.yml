@@ -1,0 +1,54 @@
+---
+# satellite-sync-vulnerabilities.yml
+# Gruve NOC — Satellite Vulnerability Sync
+# Queries Satellite API for errata data — no SSH into VMs needed
+# Replaces vm-vulnerability-scan.yml
+#
+# Extra vars:
+#   target_host: specific VM name to sync (optional — syncs all if not set)
+
+- name: Satellite Vulnerability Sync
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    satellite_url:  "https://satellite.gruveai.com"
+    satellite_user: "admin"
+    satellite_pass: "Gruve@2026"
+    gruve_noc_api:  "https://noc-api-gruve-noc.apps.ocp-mig2.gruveai.com"
+
+    # All managed hosts — ID from Satellite API
+    # satellite.gruveai.com (ID:1) excluded — it's the Satellite server itself
+    all_hosts:
+      - { id: 2, name: "gruve-noc-test-vm-1",          ip: "10.7.51.135", rhel: "Red Hat Enterprise Linux release 9.7 (Plow)" }
+      - { id: 3, name: "gruve-noc-test-vm-2",          ip: "10.7.51.136", rhel: "Red Hat Enterprise Linux release 9.7 (Plow)" }
+      - { id: 4, name: "gruve-noc-test-vm-3",          ip: "10.7.51.137", rhel: "Red Hat Enterprise Linux release 8.6 (Ootpa)" }
+      - { id: 5, name: "haproxy.ocp-mig2.gruveai.com", ip: "10.7.51.32",  rhel: "Red Hat Enterprise Linux release 9.7 (Plow)" }
+
+  tasks:
+
+    # ── Build target host list ──────────────────────────────────────────────
+    - name: Set hosts to sync
+      ansible.builtin.set_fact:
+        hosts_to_sync: >-
+          {{
+            all_hosts | selectattr('name', 'equalto', target_host) | list
+            if (target_host is defined and target_host != '')
+            else all_hosts
+          }}
+
+    - name: Show sync targets
+      ansible.builtin.debug:
+        msg: "Syncing {{ hosts_to_sync | length }} host(s): {{ hosts_to_sync | map(attribute='name') | list }}"
+
+    # ── Sync each host ──────────────────────────────────────────────────────
+    - name: Sync vulnerabilities for each host
+      ansible.builtin.include_tasks: satellite_sync_host.yml
+      loop: "{{ hosts_to_sync }}"
+      loop_control:
+        loop_var: host_item
+        label: "{{ host_item.name }}"
+
+    - name: Sync complete
+      ansible.builtin.debug:
+        msg: "Satellite vulnerability sync complete for {{ hosts_to_sync | length }} host(s)"

@@ -1,0 +1,94 @@
+---
+# satellite_sync_host.yml
+# Called by satellite-sync-vulnerabilities.yml for each host
+
+- name: "Query Satellite errata for {{ host_item.name }}"
+  ansible.builtin.uri:
+    url: "{{ satellite_url }}/api/hosts/{{ host_item.id }}/errata?per_page=500&type=security"
+    method: GET
+    user: "{{ satellite_user }}"
+    password: "{{ satellite_pass }}"
+    force_basic_auth: true
+    validate_certs: false
+    return_content: true
+    timeout: 60
+  register: errata_response
+  failed_when: false
+
+- name: "Query package count for {{ host_item.name }}"
+  ansible.builtin.uri:
+    url: "{{ satellite_url }}/api/hosts/{{ host_item.id }}/packages?per_page=1"
+    method: GET
+    user: "{{ satellite_user }}"
+    password: "{{ satellite_pass }}"
+    force_basic_auth: true
+    validate_certs: false
+    return_content: true
+    timeout: 30
+  register: packages_response
+  failed_when: false
+
+- name: "Parse errata for {{ host_item.name }}"
+  ansible.builtin.set_fact:
+    errata_list:   "{{ errata_response.json.results | default([]) }}"
+    total_errata:  "{{ errata_response.json.total   | default(0) }}"
+    pkg_count:     "{{ packages_response.json.total | default(0) }}"
+
+- name: "Build vulnerability payload for {{ host_item.name }}"
+  ansible.builtin.set_fact:
+    vuln_payload:
+      vm_name:          "{{ host_item.name }}"
+      vm_ip:            "{{ host_item.ip }}"
+      rhel_version:     "{{ host_item.rhel }}"
+      scan_type:        "satellite"
+      packages_scanned: "{{ pkg_count | int }}"
+      security_updates: "{{ total_errata | int }}"
+      critical:  >-
+        {{ errata_list | selectattr('severity', 'defined')
+           | selectattr('severity', 'equalto', 'Critical') | list | length }}
+      important: >-
+        {{ errata_list | selectattr('severity', 'defined')
+           | selectattr('severity', 'equalto', 'Important') | list | length }}
+      moderate:  >-
+        {{ errata_list | selectattr('severity', 'defined')
+           | selectattr('severity', 'equalto', 'Moderate') | list | length }}
+      low:       >-
+        {{ errata_list | selectattr('severity', 'defined')
+           | selectattr('severity', 'equalto', 'Low') | list | length }}
+      updates: >-
+        {{
+          errata_list[:50] | map('ansible.builtin.combine',
+            {'name':       '',
+             'current_version': '',
+             'available_version': ''}) | list
+          | json_query("[].{
+              name:              errata_id,
+              advisory:          errata_id,
+              severity:          severity,
+              current_version:   '',
+              available_version: '',
+              cves:              cves
+            }")
+        }}
+      raw_output: "Satellite sync — {{ total_errata }} security errata found"
+
+- name: "POST results to Gruve NOC for {{ host_item.name }}"
+  ansible.builtin.uri:
+    url: "{{ gruve_noc_api }}/api/v1/vulnerabilities/scan/{{ host_item.name }}"
+    method: POST
+    body_format: json
+    validate_certs: false
+    timeout: 60
+    body: "{{ vuln_payload }}"
+  register: noc_response
+  failed_when: false
+
+- name: "Result for {{ host_item.name }}"
+  ansible.builtin.debug:
+    msg: >-
+      {{ host_item.name }}:
+      critical={{ vuln_payload.critical }}
+      important={{ vuln_payload.important }}
+      moderate={{ vuln_payload.moderate }}
+      total={{ total_errata }}
+      NOC_status={{ noc_response.status | default('error') }}
