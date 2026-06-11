@@ -1,6 +1,5 @@
 ---
-# satellite_sync_host.yml
-# Called by satellite-sync-vulnerabilities.yml for each host
+# satellite_sync_host.yml — called per host, no community.general needed
 
 - name: "Query Satellite errata for {{ host_item.name }}"
   ansible.builtin.uri:
@@ -10,7 +9,6 @@
     password: "{{ satellite_pass }}"
     force_basic_auth: true
     validate_certs: false
-    return_content: true
     timeout: 60
   register: errata_response
   failed_when: false
@@ -23,54 +21,45 @@
     password: "{{ satellite_pass }}"
     force_basic_auth: true
     validate_certs: false
-    return_content: true
     timeout: 30
   register: packages_response
   failed_when: false
 
-- name: "Parse errata for {{ host_item.name }}"
+- name: "Set base facts for {{ host_item.name }}"
   ansible.builtin.set_fact:
-    errata_list:   "{{ errata_response.json.results | default([]) }}"
-    total_errata:  "{{ errata_response.json.total   | default(0) }}"
-    pkg_count:     "{{ packages_response.json.total | default(0) }}"
+    errata_list:  "{{ errata_response.json.results  | default([]) }}"
+    total_errata: "{{ errata_response.json.total    | default(0) }}"
+    pkg_count:    "{{ packages_response.json.total  | default(0) }}"
 
-- name: "Build vulnerability payload for {{ host_item.name }}"
+- name: "Count severities for {{ host_item.name }}"
   ansible.builtin.set_fact:
-    vuln_payload:
-      vm_name:          "{{ host_item.name }}"
-      vm_ip:            "{{ host_item.ip }}"
-      rhel_version:     "{{ host_item.rhel }}"
-      scan_type:        "satellite"
-      packages_scanned: "{{ pkg_count | int }}"
-      security_updates: "{{ total_errata | int }}"
-      critical:  >-
-        {{ errata_list | selectattr('severity', 'defined')
-           | selectattr('severity', 'equalto', 'Critical') | list | length }}
-      important: >-
-        {{ errata_list | selectattr('severity', 'defined')
-           | selectattr('severity', 'equalto', 'Important') | list | length }}
-      moderate:  >-
-        {{ errata_list | selectattr('severity', 'defined')
-           | selectattr('severity', 'equalto', 'Moderate') | list | length }}
-      low:       >-
-        {{ errata_list | selectattr('severity', 'defined')
-           | selectattr('severity', 'equalto', 'Low') | list | length }}
-      updates: >-
-        {{
-          errata_list[:50] | map('ansible.builtin.combine',
-            {'name':       '',
-             'current_version': '',
-             'available_version': ''}) | list
-          | json_query("[].{
-              name:              errata_id,
-              advisory:          errata_id,
-              severity:          severity,
-              current_version:   '',
-              available_version: '',
-              cves:              cves
-            }")
-        }}
-      raw_output: "Satellite sync — {{ total_errata }} security errata found"
+    count_critical:  "{{ errata_list | selectattr('severity', 'defined') | selectattr('severity', 'equalto', 'Critical')  | list | length }}"
+    count_important: "{{ errata_list | selectattr('severity', 'defined') | selectattr('severity', 'equalto', 'Important') | list | length }}"
+    count_moderate:  "{{ errata_list | selectattr('severity', 'defined') | selectattr('severity', 'equalto', 'Moderate')  | list | length }}"
+    count_low:       "{{ errata_list | selectattr('severity', 'defined') | selectattr('severity', 'equalto', 'Low')       | list | length }}"
+
+- name: "Build updates list for {{ host_item.name }}"
+  ansible.builtin.set_fact:
+    updates_list: "{{ errata_list[:50] | map('ansible.builtin.combine', {}) | list }}"
+
+- name: "Format updates for {{ host_item.name }}"
+  ansible.builtin.set_fact:
+    formatted_updates: >-
+      {{ formatted_updates | default([]) + [{
+        'name':              item.errata_id | default(''),
+        'advisory':          item.errata_id | default(''),
+        'severity':          item.severity  | default('moderate') | lower,
+        'current_version':   '',
+        'available_version': '',
+        'cves':              item.cves      | default([])
+      }] }}
+  loop: "{{ errata_list[:50] }}"
+  when: errata_list | length > 0
+
+- name: "Reset formatted_updates if no errata"
+  ansible.builtin.set_fact:
+    formatted_updates: []
+  when: errata_list | length == 0
 
 - name: "POST results to Gruve NOC for {{ host_item.name }}"
   ansible.builtin.uri:
@@ -79,7 +68,19 @@
     body_format: json
     validate_certs: false
     timeout: 60
-    body: "{{ vuln_payload }}"
+    body:
+      vm_name:          "{{ host_item.name }}"
+      vm_ip:            "{{ host_item.ip }}"
+      rhel_version:     "{{ host_item.rhel }}"
+      scan_type:        "satellite"
+      packages_scanned: "{{ pkg_count | int }}"
+      security_updates: "{{ total_errata | int }}"
+      critical:         "{{ count_critical  | int }}"
+      important:        "{{ count_important | int }}"
+      moderate:         "{{ count_moderate  | int }}"
+      low:              "{{ count_low       | int }}"
+      updates:          "{{ formatted_updates | default([]) }}"
+      raw_output:       "Satellite sync — {{ total_errata }} security errata"
   register: noc_response
   failed_when: false
 
@@ -87,8 +88,12 @@
   ansible.builtin.debug:
     msg: >-
       {{ host_item.name }}:
-      critical={{ vuln_payload.critical }}
-      important={{ vuln_payload.important }}
-      moderate={{ vuln_payload.moderate }}
+      critical={{ count_critical }}
+      important={{ count_important }}
+      moderate={{ count_moderate }}
       total={{ total_errata }}
-      NOC_status={{ noc_response.status | default('error') }}
+      NOC={{ noc_response.status | default('error') }}
+
+- name: "Reset formatted_updates for next host"
+  ansible.builtin.set_fact:
+    formatted_updates: []
