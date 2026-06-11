@@ -1,15 +1,8 @@
 ---
-# satellite-sync-vulnerabilities.yml
-# Gruve NOC — Satellite Vulnerability Sync
-# Queries Satellite API for errata data — no SSH into VMs needed
-# Replaces vm-vulnerability-scan.yml
-#
-# Extra vars:
-#   target_host: specific VM name to sync (optional — syncs all if not set)
-
-- name: Satellite Vulnerability Sync
-  hosts: localhost
-  gather_facts: false
+- name: Satellite Vulnerability Sync — Upload profiles then query errata
+  hosts: "{{ target_host | default('all') }}"
+  become: true
+  gather_facts: true
 
   vars:
     satellite_url:  "https://satellite.gruveai.com"
@@ -17,38 +10,96 @@
     satellite_pass: "Gruve@2026"
     gruve_noc_api:  "https://noc-api-gruve-noc.apps.ocp-mig2.gruveai.com"
 
-    # All managed hosts — ID from Satellite API
-    # satellite.gruveai.com (ID:1) excluded — it's the Satellite server itself
-    all_hosts:
-      - { id: 2, name: "gruve-noc-test-vm-1",          ip: "10.7.51.135", rhel: "Red Hat Enterprise Linux release 9.7 (Plow)" }
-      - { id: 3, name: "gruve-noc-test-vm-2",          ip: "10.7.51.136", rhel: "Red Hat Enterprise Linux release 9.7 (Plow)" }
-      - { id: 4, name: "gruve-noc-test-vm-3",          ip: "10.7.51.137", rhel: "Red Hat Enterprise Linux release 8.6 (Ootpa)" }
-      - { id: 5, name: "haproxy.ocp-mig2.gruveai.com", ip: "10.7.51.32",  rhel: "Red Hat Enterprise Linux release 9.7 (Plow)" }
-
   tasks:
 
-    # ── Build target host list ──────────────────────────────────────────────
-    - name: Set hosts to sync
+    - name: Upload package profile to Satellite
+      ansible.builtin.shell: |
+        subscription-manager upload-profile 2>/dev/null || true
+        dnf makecache -q 2>/dev/null || true
+      changed_when: false
+      failed_when: false
+
+    - name: Get RHEL version
+      ansible.builtin.shell: cat /etc/redhat-release
+      register: rhel_version
+      changed_when: false
+
+    - name: Get installed package count
+      ansible.builtin.shell: rpm -qa | wc -l
+      register: pkg_count
+      changed_when: false
+
+    - name: Get security updates via dnf
+      ansible.builtin.shell: |
+        python3 << 'PYEOF'
+        import json, re, subprocess
+        try:
+            p = subprocess.Popen(
+                'dnf updateinfo list security 2>/dev/null',
+                shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+            out, _ = p.communicate(timeout=120)
+            output = out.decode('utf-8', errors='replace').strip()
+        except Exception:
+            output = ""
+        updates = []
+        seen = set()
+        pat = re.compile(r'^(RHSA-\d{4}:\d+|RHBA-\d{4}:\d+)\s+(\S+)\s+(\S+)')
+        for line in output.splitlines():
+            m = pat.match(line.strip())
+            if not m: continue
+            adv, sev_raw, pkg = m.group(1), m.group(2).lower(), m.group(3)
+            if adv in seen: continue
+            seen.add(adv)
+            if 'critical' in sev_raw:   sev = 'critical'
+            elif 'important' in sev_raw: sev = 'important'
+            elif 'moderate' in sev_raw:  sev = 'moderate'
+            elif 'low' in sev_raw:       sev = 'low'
+            else: continue
+            name = re.sub(r'-\d+.*', '', pkg.split('.')[0]) or pkg
+            updates.append({"name":name,"current_version":"","available_version":pkg,
+                            "severity":sev,"advisory":adv,"cves":[]})
+        result = {
+            "updates":   updates[:50],
+            "critical":  sum(1 for u in updates if u["severity"]=="critical"),
+            "important": sum(1 for u in updates if u["severity"]=="important"),
+            "moderate":  sum(1 for u in updates if u["severity"]=="moderate"),
+            "low":       sum(1 for u in updates if u["severity"]=="low"),
+            "total":     len(updates)
+        }
+        print(json.dumps(result))
+        PYEOF
+      register: vuln_raw
+      changed_when: false
+      failed_when: false
+
+    - name: Parse vulnerability data
       ansible.builtin.set_fact:
-        hosts_to_sync: >-
-          {{
-            all_hosts | selectattr('name', 'equalto', target_host) | list
-            if (target_host is defined and target_host != '')
-            else all_hosts
-          }}
+        vuln_data: "{{ vuln_raw.stdout | from_json if vuln_raw.stdout | trim != '' else {'updates':[],'critical':0,'important':0,'moderate':0,'low':0,'total':0} }}"
 
-    - name: Show sync targets
+    - name: POST results to Gruve NOC
+      ansible.builtin.uri:
+        url: "{{ gruve_noc_api }}/api/v1/vulnerabilities/scan/{{ inventory_hostname }}"
+        method: POST
+        body_format: json
+        validate_certs: false
+        timeout: 60
+        body:
+          vm_name:          "{{ inventory_hostname }}"
+          vm_ip:            "{{ ansible_default_ipv4.address | default(ansible_host) }}"
+          rhel_version:     "{{ rhel_version.stdout | trim }}"
+          scan_type:        "satellite_dnf"
+          packages_scanned: "{{ pkg_count.stdout | int }}"
+          security_updates: "{{ vuln_data.total }}"
+          critical:         "{{ vuln_data.critical }}"
+          important:        "{{ vuln_data.important }}"
+          moderate:         "{{ vuln_data.moderate }}"
+          low:              "{{ vuln_data.low }}"
+          updates:          "{{ vuln_data.updates }}"
+          raw_output:       "Satellite+DNF scan on {{ inventory_hostname }}"
+      register: noc_response
+      failed_when: false
+
+    - name: Log result
       ansible.builtin.debug:
-        msg: "Syncing {{ hosts_to_sync | length }} host(s): {{ hosts_to_sync | map(attribute='name') | list }}"
-
-    # ── Sync each host ──────────────────────────────────────────────────────
-    - name: Sync vulnerabilities for each host
-      ansible.builtin.include_tasks: satellite_sync_host.yml
-      loop: "{{ hosts_to_sync }}"
-      loop_control:
-        loop_var: host_item
-        label: "{{ host_item.name }}"
-
-    - name: Sync complete
-      ansible.builtin.debug:
-        msg: "Satellite vulnerability sync complete for {{ hosts_to_sync | length }} host(s)"
+        msg: "{{ inventory_hostname }}: {{ vuln_data.critical }}C {{ vuln_data.important }}I {{ vuln_data.moderate }}M total={{ vuln_data.total }} API={{ noc_response.status | default('error') }}"
