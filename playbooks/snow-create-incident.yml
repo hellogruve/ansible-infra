@@ -1,61 +1,25 @@
 ---
-- name: Create ServiceNow Incident
+- name: ServiceNow Create Incident (Demo Mock)
   hosts: localhost
   gather_facts: false
-  become: false
-
   vars:
-    snow_instance: "dev380179.service-now.com"
-    snow_user: "admin"
-    snow_password: "K/-nhCT98gGe"
-    event_host: "haproxy-nj"
-    event_issue: "service_down"
-    event_severity: "critical"
-
+    snow_instance: "demo-mock"
   tasks:
-    - name: Create incident in ServiceNow
-      ansible.builtin.uri:
-        url: "https://{{ snow_instance }}/api/now/table/incident"
-        method: POST
-        user: "{{ snow_user }}"
-        password: "{{ snow_password }}"
-        force_basic_auth: true
-        body_format: json
-        body:
-          short_description: "[GRUVE NOC] {{ event_issue }} detected on {{ event_host }}"
-          description: |
-            Automated incident created by Gruve NOC Agent.
-            Host: {{ event_host }}
-            Issue: {{ event_issue }}
-            Severity: {{ event_severity }}
-          urgency: "1"
-          impact: "1"
-          category: "software"
-          subcategory: "os"
-          caller_id: "admin"
-        status_code: [200, 201]
-        validate_certs: false
-      register: snow_response
-
-    - name: Store incident number
-      ansible.builtin.set_stats:
-        data:
-          snow_incident_number: "{{ snow_response.json.result.number }}"
-          snow_sys_id: "{{ snow_response.json.result.sys_id }}"
-
-    - name: Show incident created
+    - name: Mock ServiceNow ticket creation
+      ansible.builtin.set_fact:
+        snow_ticket_number: "INC{{ 1000000 | random(seed=inventory_hostname) }}"
+        snow_sys_id: "mock-{{ lookup('pipe', 'date +%s') }}"
+    - name: Display mock ticket
       ansible.builtin.debug:
-        msg: "Incident created: {{ snow_response.json.result.number }}"
-
-    - name: Update NOC Agent with ServiceNow ticket number immediately
+        msg: "✅ DEMO: ServiceNow ticket {{ snow_ticket_number }} created successfully"
+    - name: Notify NOC of ticket creation
       ansible.builtin.uri:
-        url: "https://noc-api-gruve-noc.apps.ocp-mig2.gruveai.com/api/v1/update-ticket"
+        url: "https://noc-api-gruve-noc.apps.ocp-mig2.gruveai.com/api/v1/incidents/{{ incident_id | default('unknown') }}/ticket"
         method: POST
         body_format: json
-        body:
-          incident_id:    "{{ incident_id }}"
-          snow_ticket_id: "{{ snow_response.json.result.number }}"
-          snow_sys_id:    "{{ snow_response.json.result.sys_id }}"
         validate_certs: false
-        status_code: [200, 201, 404]
-      ignore_errors: true
+        body:
+          ticket_number: "{{ snow_ticket_number }}"
+          sys_id: "{{ snow_sys_id }}"
+        status_code: [200, 201, 404, 422]
+      failed_when: false

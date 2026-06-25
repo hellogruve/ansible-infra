@@ -1,48 +1,8 @@
 ---
-- name: Resolve ServiceNow Incident
+- name: ServiceNow Resolve Incident (Demo Mock)
   hosts: localhost
   gather_facts: false
-  become: false
-
-  vars:
-    snow_instance: "dev380179.service-now.com"
-    snow_user: "admin"
-    snow_password: "K/-nhCT98gGe"
-    snow_sys_id: ""
-    snow_incident_number: ""
-    remediation_summary: "Automated remediation completed successfully"
-
   tasks:
-    - name: Set caller for incident
-      ansible.builtin.uri:
-        url: "https://{{ snow_instance }}/api/now/table/incident/{{ snow_sys_id }}"
-        method: PATCH
-        user: "{{ snow_user }}"
-        password: "{{ snow_password }}"
-        force_basic_auth: true
-        body_format: json
-        body:
-          caller_id: "admin"
-        validate_certs: false
-      register: caller_result
-
-    - name: Resolve the incident
-      ansible.builtin.uri:
-        url: "https://{{ snow_instance }}/api/now/table/incident/{{ snow_sys_id }}"
-        method: PATCH
-        user: "{{ snow_user }}"
-        password: "{{ snow_password }}"
-        force_basic_auth: true
-        body_format: json
-        body:
-          state: "6"
-          close_code: "Solved (Permanently)"
-          close_notes: "Incident resolved by Gruve NOC automated remediation. {{ remediation_summary }}"
-          caller_id: "admin"
-        status_code: [200, 201]
-        validate_certs: false
-      register: resolve_response
-
-    - name: Confirm resolution
+    - name: Mock ServiceNow ticket resolution
       ansible.builtin.debug:
-        msg: "Incident {{ snow_incident_number }} resolved - State: {{ resolve_response.json.result.state }}"
+        msg: "✅ DEMO: ServiceNow ticket resolved successfully"
