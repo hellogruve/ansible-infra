@@ -1,0 +1,9 @@
+profile: production
+exclude_paths:
+  - .git/
+  - playbooks/satellite_sync_host.yml
+warn_list: []
+skip_list:
+  - yaml[line-length]
+kinds:
+  - tasks: "playbooks/satellite_sync_host.yml"
