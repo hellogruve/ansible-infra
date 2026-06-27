@@ -16,11 +16,11 @@
         method: POST
         body_format: json
         body:
-          incident_id:          "{{ incident_id }}"
-          status:               "resolved"
-          message:              "Resolved by AAP workflow — ServiceNow ticket closed"
-          snow_ticket_id:       "{{ snow_incident_number }}"
-          snow_sys_id:          "{{ snow_sys_id }}"
+          incident_id: "{{ incident_id }}"
+          status: "resolved"
+          message: "Resolved by AAP workflow — ServiceNow ticket closed"
+          snow_ticket_id: "{{ snow_incident_number }}"
+          snow_sys_id: "{{ snow_sys_id }}"
         validate_certs: false
         status_code: [200, 201, 404]
       register: result

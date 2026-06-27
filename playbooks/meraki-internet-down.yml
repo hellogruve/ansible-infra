@@ -6,16 +6,16 @@
 
   vars:
     meraki_api_key: "{{ meraki_api_key | default('') }}"
-    device_serial:  "{{ device_serial | default('') }}"
-    device_name:    "{{ device_name | default('unknown') }}"
-    network_id:     "{{ network_id | default('') }}"
-    snow_ticket:    "{{ snow_ticket | default('') }}"
-    uplink_name:    "{{ uplink_name | default('WAN1') }}"
+    device_serial: "{{ device_serial | default('') }}"
+    device_name: "{{ device_name | default('unknown') }}"
+    network_id: "{{ network_id | default('') }}"
+    snow_ticket: "{{ snow_ticket | default('') }}"
+    uplink_name: "{{ uplink_name | default('WAN1') }}"
 
   tasks:
 
     - name: Log incident details
-      debug:
+      ansible.builtin.debug:
         msg: |
           Gruve NOC Remediation Started
           Incident: INTERNET_DOWN
@@ -25,7 +25,7 @@
           ServiceNow: {{ snow_ticket }}
 
     - name: Check uplink status via Meraki API
-      uri:
+      ansible.builtin.uri:
         url: "https://api.meraki.com/api/v1/organizations/1655564/appliance/uplink/statuses"
         method: GET
         headers:
@@ -37,7 +37,7 @@
       ignore_errors: true
 
     - name: Attempt MX appliance reboot
-      uri:
+      ansible.builtin.uri:
         url: "https://api.meraki.com/api/v1/devices/{{ device_serial }}/reboot"
         method: POST
         headers:
@@ -50,7 +50,7 @@
       when: device_serial != ''
 
     - name: Display remediation result
-      debug:
+      ansible.builtin.debug:
         msg: >-
           Internet down remediation executed for {{ device_name }}.
           Uplink: {{ uplink_name }}.

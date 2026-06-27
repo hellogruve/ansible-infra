@@ -43,5 +43,5 @@
     - name: Remediation successful
       ansible.builtin.debug:
         msg: >
-          Incident {{ snow_incident_number }} - 
+          Incident {{ snow_incident_number }} -
           {{ target_service }} is now {{ post_status.status.ActiveState }}

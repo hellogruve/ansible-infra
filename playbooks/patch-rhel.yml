@@ -17,7 +17,7 @@
     - name: Apply all updates
       ansible.builtin.dnf:
         name: "*"
-        state: latest
+        state: latest  # noqa: package-latest
         update_cache: true
       register: patch_result
 

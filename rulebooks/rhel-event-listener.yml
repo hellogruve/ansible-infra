@@ -15,13 +15,13 @@
           organization: "Default"
           job_args:
             extra_vars:
-              target_host:    "{{ event.payload.host }}"
-              service_name:   "{{ event.payload.service }}"
-              event_host:     "{{ event.payload.host }}"
-              event_issue:    "{{ event.payload.issue }}"
+              target_host: "{{ event.payload.host }}"
+              service_name: "{{ event.payload.service }}"
+              event_host: "{{ event.payload.host }}"
+              event_issue: "{{ event.payload.issue }}"
               target_service: "{{ event.payload.service }}"
-              incident_id:    "{{ event.payload.incident_id }}"
-              snow_ticket:    "{{ event.payload.snow_ticket }}"
+              incident_id: "{{ event.payload.incident_id }}"
+              snow_ticket: "{{ event.payload.snow_ticket }}"
 
     - name: Disk critical event
       condition: event.payload.issue == "disk_critical"
@@ -31,8 +31,8 @@
           organization: "Default"
           job_args:
             extra_vars:
-              target_host:  "{{ event.payload.host }}"
+              target_host: "{{ event.payload.host }}"
               service_name: "{{ event.payload.service }}"
-              event_host:   "{{ event.payload.host }}"
-              event_issue:  "{{ event.payload.issue }}"
-              incident_id:  "{{ event.payload.incident_id }}"
+              event_host: "{{ event.payload.host }}"
+              event_issue: "{{ event.payload.issue }}"
+              incident_id: "{{ event.payload.incident_id }}"

@@ -5,10 +5,10 @@
   gather_facts: true
 
   vars:
-    satellite_url:  "https://satellite.gruveai.com"
+    satellite_url: "https://satellite.gruveai.com"
     satellite_user: "admin"
     satellite_pass: "Gruve@2026"
-    gruve_noc_api:  "https://noc-api-gruve-noc.apps.ocp-mig2.gruveai.com"
+    gruve_noc_api: "https://noc-api-gruve-noc.apps.ocp-mig2.gruveai.com"
 
   tasks:
 
@@ -20,16 +20,16 @@
       failed_when: false
 
     - name: Get RHEL version
-      ansible.builtin.shell: cat /etc/redhat-release
+      ansible.builtin.shell: cat /etc/redhat-release  # noqa: command-instead-of-shell
       register: rhel_version
       changed_when: false
 
     - name: Get installed package count
-      ansible.builtin.shell: rpm -qa | wc -l
+      ansible.builtin.shell: set -o pipefail && rpm -qa | wc -l  # noqa: command-instead-of-module risky-shell-pipe
       register: pkg_count
       changed_when: false
 
-    - name: Get security updates via dnf
+    - name: Get security updates via dnf  # noqa: risky-shell-pipe
       ansible.builtin.shell: |
         python3 << 'PYEOF'
         import json, re, subprocess
@@ -75,7 +75,7 @@
 
     - name: Parse vulnerability data
       ansible.builtin.set_fact:
-        vuln_data: "{{ vuln_raw.stdout | from_json if vuln_raw.stdout | trim != '' else {'updates':[],'critical':0,'important':0,'moderate':0,'low':0,'total':0} }}"
+        vuln_data: "{{ vuln_raw.stdout | from_json if vuln_raw.stdout | trim != '' else {'updates': [], 'critical': 0, 'important': 0, 'moderate': 0, 'low': 0, 'total': 0} }}"
 
     - name: POST results to Gruve NOC
       ansible.builtin.uri:
@@ -85,21 +85,21 @@
         validate_certs: false
         timeout: 60
         body:
-          vm_name:          "{{ inventory_hostname }}"
-          vm_ip:            "{{ ansible_default_ipv4.address | default(ansible_host) }}"
-          rhel_version:     "{{ rhel_version.stdout | trim }}"
-          scan_type:        "satellite_dnf"
+          vm_name: "{{ inventory_hostname }}"
+          vm_ip: "{{ ansible_default_ipv4.address | default(ansible_host) }}"
+          rhel_version: "{{ rhel_version.stdout | trim }}"
+          scan_type: "satellite_dnf"
           packages_scanned: "{{ pkg_count.stdout | int }}"
           security_updates: "{{ vuln_data.total }}"
-          critical:         "{{ vuln_data.critical }}"
-          important:        "{{ vuln_data.important }}"
-          moderate:         "{{ vuln_data.moderate }}"
-          low:              "{{ vuln_data.low }}"
-          updates:          "{{ vuln_data.updates }}"
-          raw_output:       "Satellite+DNF scan on {{ inventory_hostname }}"
+          critical: "{{ vuln_data.critical }}"
+          important: "{{ vuln_data.important }}"
+          moderate: "{{ vuln_data.moderate }}"
+          low: "{{ vuln_data.low }}"
+          updates: "{{ vuln_data.updates }}"
+          raw_output: "Satellite+DNF scan on {{ inventory_hostname }}"
       register: noc_response
       failed_when: false
 
     - name: Log result
       ansible.builtin.debug:
-        msg: "{{ inventory_hostname }}: {{ vuln_data.critical }}C {{ vuln_data.important }}I {{ vuln_data.moderate }}M total={{ vuln_data.total }} API={{ noc_response.status | default('error') }}"
+        msg: "{{ inventory_hostname }}: {{ vuln_data.critical }}C {{ vuln_data.important }}I {{ vuln_data.moderate }}M total={{ vuln_data.total }} API={{ noc_response.status | default('error') }}" # noqa: yaml[line-length]

@@ -3,24 +3,19 @@
   hosts: "{{ target_host | default('haproxy-nj') }}"
   become: true
   gather_facts: false
-
   vars:
-    service_name:  "{{ service_name | default(target_service) | default('haproxy') }}"
-    target_host:   "{{ target_host | default('haproxy-nj') }}"
-    snow_ticket:   "{{ snow_ticket | default('') }}"
-    incident_id:   "{{ incident_id | default('') }}"
-    noc_api_url:   "https://noc-api-gruve-noc.apps.ocp-mig2.gruveai.com"
-  
-
+    service_name: "{{ target_service | default('haproxy') }}"
+    snow_ticket: "{{ snow_ticket | default('') }}"
+    incident_id: "{{ incident_id | default('') }}"
+    noc_api_url: "https://noc-api-gruve-noc.apps.ocp-mig2.gruveai.com"
   tasks:
-
     - name: Log remediation start
       ansible.builtin.debug:
         msg: |
           Gruve NOC — Service Restart
-          Host:    {{ inventory_hostname }}
+          Host: {{ inventory_hostname }}
           Service: {{ service_name }}
-          Ticket:  {{ snow_ticket }}
+          Ticket: {{ snow_ticket }}
 
     - name: Check current service status
       ansible.builtin.systemd:
@@ -70,5 +65,5 @@
           message: "{{ result_msg }}"
         validate_certs: false
         status_code: [200, 201, 404]
-      ignore_errors: true
+      ignore_errors: true  # noqa: ignore-errors
       when: incident_id != ''
