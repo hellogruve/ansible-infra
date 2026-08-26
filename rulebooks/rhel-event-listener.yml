@@ -11,7 +11,7 @@
       condition: event.payload.issue == "service_down"
       action:
         run_workflow_template:
-          name: "HAProxy not working Remediation Workflow"
+          name: "Service Down Remediation Workflow"
           organization: "Default"
           job_args:
             extra_vars:
