@@ -1,18 +1,70 @@
 ---
-- name: ServiceNow Create Incident (Demo Mock)
+- name: ServiceNow Create Incident
   hosts: localhost
   gather_facts: false
+
   vars:
-    snow_instance: "demo-mock"
+    service_name: "{{ service_name | default('firewalld') }}"
+    affected_host: "{{ target_host | default('unknown-host') }}"
+
   tasks:
-    - name: Mock ServiceNow ticket creation
+
+    - name: Create ServiceNow incident
+      ansible.builtin.uri:
+        url: "https://{{ snow_instance }}/api/now/table/incident"
+        method: POST
+        user: "{{ snow_user }}"
+        password: "{{ snow_password }}"
+        force_basic_auth: true
+        validate_certs: true
+        body_format: json
+        return_content: true
+        status_code: 201
+
+        headers:
+          Accept: "application/json"
+          Content-Type: "application/json"
+
+        body:
+          short_description: "Gruve AIOps: {{ service_name }} service down on {{ affected_host }}"
+          description: |
+            Gruve Autonomous AIOps detected a service outage.
+
+            Host: {{ affected_host }}
+            Service: {{ service_name }}
+            Detection Source: Gruve Autonomous AIOps
+            Automation Platform: Red Hat Ansible Automation Platform
+
+            Automated remediation workflow has been initiated.
+
+          category: "software"
+          impact: "2"
+          urgency: "2"
+          comments: "Incident automatically created by Gruve Autonomous AIOps."
+
+      register: snow_create
+
+    - name: Store ServiceNow incident information
       ansible.builtin.set_fact:
-        snow_ticket_number: "INC{{ 1000000 | random(seed=inventory_hostname) }}"
-        snow_sys_id: "mock-{{ lookup('pipe', 'date +%s') }}"
-    - name: Display mock ticket
+        snow_ticket_number: "{{ snow_create.json.result.number }}"
+        snow_sys_id: "{{ snow_create.json.result.sys_id }}"
+
+    - name: Publish incident information to workflow
+      ansible.builtin.set_stats:
+        data:
+          snow_ticket_number: "{{ snow_ticket_number }}"
+          snow_sys_id: "{{ snow_sys_id }}"
+        per_host: false
+
+    - name: Display created ServiceNow ticket
       ansible.builtin.debug:
-        msg: "✅ DEMO: ServiceNow ticket {{ snow_ticket_number }} created successfully"
-    - name: Notify NOC of ticket creation
+        msg:
+          - "ServiceNow incident created successfully"
+          - "Incident: {{ snow_ticket_number }}"
+          - "SYS ID: {{ snow_sys_id }}"
+          - "URL: https://{{ snow_instance }}/nav_to.do?uri=incident.do?sys_id={{ snow_sys_id }}"
+
+    - name: Notify Gruve NOC of ServiceNow ticket
       ansible.builtin.uri:
         url: "https://noc-api-gruve-noc.apps.ocp-mig2.gruveai.com/api/v1/incidents/{{ incident_id | default('unknown') }}/ticket"
         method: POST
@@ -21,5 +73,34 @@
         body:
           ticket_number: "{{ snow_ticket_number }}"
           sys_id: "{{ snow_sys_id }}"
-        status_code: [200, 201, 404, 422]
+        status_code:
+          - 200
+          - 201
+          - 404
+          - 422
       failed_when: false
+#---
+#- name: ServiceNow Create Incident (Demo Mock)
+#  hosts: localhost
+#  gather_facts: false
+#  vars:
+#    snow_instance: "demo-mock"
+#  tasks:
+#    - name: Mock ServiceNow ticket creation
+#      ansible.builtin.set_fact:
+#        snow_ticket_number: "INC{{ 1000000 | random(seed=inventory_hostname) }}"
+#        snow_sys_id: "mock-{{ lookup('pipe', 'date +%s') }}"
+#    - name: Display mock ticket
+#      ansible.builtin.debug:
+#        msg: "✅ DEMO: ServiceNow ticket {{ snow_ticket_number }} created successfully"
+#    - name: Notify NOC of ticket creation
+#      ansible.builtin.uri:
+#        url: "https://noc-api-gruve-noc.apps.ocp-mig2.gruveai.com/api/v1/incidents/{{ incident_id | default('unknown') }}/ticket"
+#        method: POST
+#        body_format: json
+#        validate_certs: false
+#        body:
+#          ticket_number: "{{ snow_ticket_number }}"
+#          sys_id: "{{ snow_sys_id }}"
+#        status_code: [200, 201, 404, 422]
+#      failed_when: false
