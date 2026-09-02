@@ -1,8 +1,69 @@
 ---
-- name: ServiceNow Resolve Incident (Demo Mock)
+- name: ServiceNow Resolve Incident
   hosts: localhost
   gather_facts: false
+
+  vars:
+    service_name: "{{ service_name | default('firewalld') }}"
+    affected_host: "{{ target_host | default('unknown-host') }}"
+
   tasks:
-    - name: Mock ServiceNow ticket resolution
+
+    - name: Validate ServiceNow incident SYS ID
+      ansible.builtin.assert:
+        that:
+          - snow_sys_id is defined
+          - snow_sys_id | length > 0
+        fail_msg: "snow_sys_id was not provided by the previous workflow step."
+
+    - name: Resolve ServiceNow incident
+      ansible.builtin.uri:
+        url: "https://{{ snow_instance }}/api/now/table/incident/{{ snow_sys_id }}"
+        method: PATCH
+        user: "{{ snow_user }}"
+        password: "{{ snow_password }}"
+        force_basic_auth: true
+        validate_certs: true
+        body_format: json
+        return_content: true
+        status_code: 200
+
+        headers:
+          Accept: "application/json"
+          Content-Type: "application/json"
+
+        body:
+          state: "6"
+          close_code: "Solved (Permanently)"
+          close_notes: |
+            Incident automatically resolved by Gruve Autonomous AIOps.
+
+            Host: {{ affected_host }}
+            Service: {{ service_name }}
+
+            Ansible Automation Platform successfully restarted the affected service
+            and validated service availability.
+
+            No manual intervention was required.
+
+          work_notes: |
+            Automated remediation completed successfully.
+            Service health validation passed.
+            Closing incident.
+
+      register: snow_resolve
+
+    - name: Display resolved incident
       ansible.builtin.debug:
-        msg: "✅ DEMO: ServiceNow ticket resolved successfully"
+        msg:
+          - "ServiceNow incident {{ snow_ticket_number }} resolved successfully"
+          - "Service: {{ service_name }}"
+          - "Host: {{ affected_host }}"
+#---
+#- name: ServiceNow Resolve Incident (Demo Mock)
+#  hosts: localhost
+#  gather_facts: false
+#  tasks:
+#    - name: Mock ServiceNow ticket resolution
+#      ansible.builtin.debug:
+#        msg: "✅ DEMO: ServiceNow ticket resolved successfully"
