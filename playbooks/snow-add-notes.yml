@@ -1,8 +1,67 @@
 ---
-- name: ServiceNow Add Notes (Demo Mock)
+- name: ServiceNow Add Remediation Notes
   hosts: localhost
   gather_facts: false
+
+  vars:
+    service_name: "{{ service_name | default('firewalld') }}"
+    affected_host: "{{ target_host | default('unknown-host') }}"
+
   tasks:
-    - name: Mock ServiceNow add notes
+
+    - name: Validate ServiceNow incident SYS ID
+      ansible.builtin.assert:
+        that:
+          - snow_sys_id is defined
+          - snow_sys_id | length > 0
+        fail_msg: "snow_sys_id was not provided by the previous workflow step."
+
+    - name: Add remediation work notes to ServiceNow
+      ansible.builtin.uri:
+        url: "https://{{ snow_instance }}/api/now/table/incident/{{ snow_sys_id }}"
+        method: PATCH
+        user: "{{ snow_user }}"
+        password: "{{ snow_password }}"
+        force_basic_auth: true
+        validate_certs: true
+        body_format: json
+        return_content: true
+        status_code: 200
+
+        headers:
+          Accept: "application/json"
+          Content-Type: "application/json"
+
+        body:
+          work_notes: |
+            Gruve Autonomous AIOps remediation update:
+
+            Host: {{ affected_host }}
+            Service: {{ service_name }}
+
+            Ansible Automation Platform executed automated remediation.
+
+            Service restart operation completed successfully.
+
+            Post-remediation service validation is being performed.
+
+      register: snow_update
+
+    - name: Preserve ServiceNow incident information
+      ansible.builtin.set_stats:
+        data:
+          snow_ticket_number: "{{ snow_ticket_number }}"
+          snow_sys_id: "{{ snow_sys_id }}"
+        per_host: false
+
+    - name: Display update
       ansible.builtin.debug:
-        msg: "✅ DEMO: Notes added to ServiceNow ticket successfully"
+        msg: "Remediation notes added to ServiceNow incident {{ snow_ticket_number }}"
+#---
+#- name: ServiceNow Add Notes (Demo Mock)
+#  hosts: localhost
+#  gather_facts: false
+#  tasks:
+#    - name: Mock ServiceNow add notes
+#      ansible.builtin.debug:
+#        msg: "✅ DEMO: Notes added to ServiceNow ticket successfully"
