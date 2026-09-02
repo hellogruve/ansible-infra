@@ -10,11 +10,11 @@
   tasks:
     - name: Verify ServiceNow credential injection
       ansible.builtin.debug:
-      msg:
-      - "ServiceNow instance: {{ snow_instance }}"
-      - "ServiceNow user: {{ snow_user }}"
-      - "Password is defined: {{ snow_password is defined }}"
-      - "Password length: {{ snow_password | length }}"
+        msg:
+          - "ServiceNow instance: {{ snow_instance }}"
+          - "ServiceNow user: {{ snow_user }}"
+          - "Password is defined: {{ snow_password is defined }}"
+          - "Password length: {{ snow_password | length }}"
     - name: Create ServiceNow incident
       ansible.builtin.uri:
         url: "https://{{ snow_instance }}/api/now/table/incident"
